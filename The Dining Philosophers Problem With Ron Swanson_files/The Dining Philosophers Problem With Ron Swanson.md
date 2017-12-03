@@ -33,11 +33,13 @@
 ![forks.png](forks.png "forks.png")
 现在的规则是：如果你使用两把叉子，你需要首先拿起编号较小的那一把。让我们看一下现在会发生什么
 ![resource_hierarchy.png](resource_hierarchy.png "resource_hierarchy.png")
-Ron #1 拿起了fork #1
-Ron #2 拿起了fork #2
-Ron #3 拿起了fork #3
-Ron #4 拿起了fork #4
-Ron #5 不能拿起fork #5!因为他需要两把叉子，要先拿一把编号较小的。
+<ul type="circle">
+<li>Ron #1 拿起了fork #1</li>
+<li>Ron #2 拿起了fork #2</li>
+<li>Ron #3 拿起了fork #3</li>
+<li>Ron #4 拿起了fork #4</li>
+<li>Ron #5 不能拿起fork #5!因为他需要两把叉子，要先拿一把编号较小的。</li>
+</ul>
 所以 Ron #4拿起了fork #5---没有死锁
 ![resource_hierarchy_result.png](resource_hierarchy_result.png "resource_hierarchy_result.png")
 很好。resource hierarchy避免了deadlock。但是速度比较慢。假设你有fork #3和fork #5.然后你决定你需要fork #2.好的，fork #3和fork #5是编号较大的叉子。所以你不得不
