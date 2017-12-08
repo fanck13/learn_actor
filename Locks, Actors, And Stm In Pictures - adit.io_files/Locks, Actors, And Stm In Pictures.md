@@ -103,3 +103,48 @@ end
 ```
 这个Waiter掌管着叉子：
 ![waiter.png](waiter.png "waiter.png")
+
+当一个哲学家饿了，他通过传送消息告知Waiter：
+```
+def think
+    puts "#{name} is thinking"
+    sleep(rand)
+    puts "#{name} gets hungry"
+    waiter.async.hungry(Actor.current)
+end
+```
+当这个waiter得了消息，他会查看是否有叉子是可用的。
+<ul type="cycle">
+    <li>如果有可用的叉子，waiter会将他们标记为“in use”，并且给哲学家发送可以吃的消息</li>
+    <li>如果没有叉子可用，waiter会告诉哲学家继续思考</li>
+</ul>
+```
+def hungry(philosopher)
+    pos=@philosopher.index(philosopher)
+    leftpos = pos
+    rightpos=(pos+1)%@forks.size
+    if @fork[leftpos]==FORKFREE && @forks[rightpos] == FORKFREE
+        @forks[leftpos] =FORKUSED
+        @eating<<philosopher
+        philosopher.aync.eat
+    else
+        philosopher.asyn.think
+    end
+end
+```
+[完整的代码在这里]()。如果你想知道使用锁是怎么做的，[请看这里]().
+共享的状态是叉子，只有一个线程在管理这个状态。问题解决了，多谢actors。
+
+## Software Transactional Memory
+这一节我要使用Haskell，因为它对STM的实现很好。
+STM的使用很简单。就像是数据库中的事物。例如，你通过不可再分的操作拿起两把叉子
+```
+atomically $ do
+    leftFork<- takeFork left
+    rightFork<- takeFork right
+```
+就是这样的，不需要涉及锁和消息传递。这就是STM工作的方式：
+1. 你定义一个变量来包含共享状态。在Haskell中这个变量叫做```TVar```：
+你可以使用```writeVar```来对这个变量进行写操作，也可以使用```readTVar```来对这个变量进行写操作。一个事物处理写和读操作```TVar```
+1. 当一个事物正在一个线程中运行，Haskell只为这个线程创建一个事物日志
+2. 
