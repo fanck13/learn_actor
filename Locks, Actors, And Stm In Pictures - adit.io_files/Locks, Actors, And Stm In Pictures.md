@@ -113,6 +113,7 @@ def think
     waiter.async.hungry(Actor.current)
 end
 ```
+![philosopher_is_hungry.png](philosopher_is_hungry.png "philosopher_is_hungry.png")
 当这个waiter得了消息，他会查看是否有叉子是可用的。
 <ul type="cycle">
     <li>如果有可用的叉子，waiter会将他们标记为“in use”，并且给哲学家发送可以吃的消息</li>
@@ -132,8 +133,11 @@ def hungry(philosopher)
     end
 end
 ```
+![actor_flow.png](actor_flow.png "actor_flow.png")
+
 [完整的代码在这里]()。如果你想知道使用锁是怎么做的，[请看这里]().
 共享的状态是叉子，只有一个线程在管理这个状态。问题解决了，多谢actors。
+![youre_welcome.gif](youre_welcome.gif "youre_welcome.gif")
 
 ## Software Transactional Memory
 这一节我要使用Haskell，因为它对STM的实现很好。
@@ -145,6 +149,86 @@ atomically $ do
 ```
 就是这样的，不需要涉及锁和消息传递。这就是STM工作的方式：
 1. 你定义一个变量来包含共享状态。在Haskell中这个变量叫做```TVar```：
+![tvar.png](tvar.png "tvar.png")
 你可以使用```writeVar```来对这个变量进行写操作，也可以使用```readTVar```来对这个变量进行写操作。一个事物处理写和读操作```TVar```
 1. 当一个事物正在一个线程中运行，Haskell只为这个线程创建一个事物日志
-2. 
+![log.png](log.png "log.png")
+2. 当一个共享内存块被写（使用write
+TVar）,TVar的地址和它的新值被写入**日志中**，而不是它本身：
+![write_log.png](write_log.png "write_log.png")
+无论何时一个共享的内存块被读（使用readTvar）：
+<ul type="circle">
+    <li>首先，这个线程会在日志中寻找这个值（以防这个值先前被writeTVar使用而写入值）。</li>
+    <li>如果什么都没有被发现，**然后**这个值被从TVar中读取出来，并且TVar和这个被读的值会被记录在日志中。</li>
+</ul>
+
+![read_log.png](read_log.png "read_log.png")
+同时，其他的线程能够运行它们自己的不可再分的代码块，并且修改这个同样的TVar。
+![many_logs.png](many_logs.png "many_logs.png")
+当不可再分的代码块结束运行，日志得到验证。验证过程是这样的，我们检查在日中的每一个readTVar，确保它匹配了实际的TVar。如果它匹配了，这个验证就成功了。然后我们将从事物日志中得到的新的值写入TVar。
+![transaction_success.png](transaction_success.png "transaction_success.png")
+
+如果验证失败了，我们删除事物日志并且再次运行代码块。
+![transaction_failure.png](transaction_failure.png "transaction_failure.png")
+既然我们使用Haskell，我们能够保证这些块没有副作用，例如，我们一次一次的运行它，并且总能得到正确的结果。
+Haskell也有类似的TMVar，TMVar或者有一个值或者是空的。
+![tmvar.png](tmvar.png "tmvar.png")
+你可以使用putTMVar放一个值到TMVar中，或者使用takeTMVar从TMVar中获取值。
+1. 如果你想要放一个值到TMVar中，并且在那里面已经有东西了，putTMVar会阻塞，直到变空。
+2. 如果你试着从TMVar中取出一个值，并且它是空的，takeTMVar会阻塞到里面有东西。
+我们的叉子就是TMVar，这有一些跟叉子相关的函数
+```
+newFork :: Int -> IO Fork
+newFork i = newTMVarIO i
+
+takeFork :: Fork -> STM Int
+takeFork fork = takeTMVar fork
+
+releaseFork :: Int -> Fork -> STM ()
+releaseFork i fork = putTMVar fork i
+```
+一个哲学家拿起两把叉子：
+```
+(leftNum, rightNum) <- atomically $ do
+  leftNum <- takeFork left
+  rightNum <- takeFork right
+  return (leftNum, rightNum)
+```
+他吃了一点
+```
+putStrLn $ printf "%s got forks %d and %d, now eating" name leftNum rightNum
+delay <- randomRIO (1,3)
+threadDelay (delay * 1000000)
+putStrLn (name ++ " is done eating. Going back to thinking.")
+```
+然后他将叉子放回去
+```
+atomically $ do
+  releaseFork leftNum left
+  releaseFork rightNum right
+```
+[完整的代码在这里](https://gist.github.com/egonSchiele/5566641)
+actor需要你重构你所有的程序。STM使用起来很简单-你只需要指定不可再分的运行哪一部分。Clojure和Haskell都对STM有核心支持。其他的很多语言也有模块支持：C，Python，Scala，Javascript等等。
+我会很高兴看到STM被更多的使用。
+## 总结
+![conclusion.png](conclusion.png "conclusion.png")
+### lock
+<ul type="cycle">
+    <li>大部分语言都是可用的</li>
+    <li>使你对你的代码更好的控制粒度</li>
+    <li>使用起来很复杂，你的代码会有死锁/饿死等情况。**你不应该使用锁**</li>
+</ul>
+
+### actors
+<ul type="cycle">
+    <li>没有贡献状态，所以很容易写线程安全的代码</li>
+    <li>没有锁。所以没有死锁除了actor阻塞</li>
+    <li>你所有的代码都要使用actors和消息传递，所以你可能需要重构你的代码</li>
+</ul>
+
+### STM
+<ul type="cycle">
+    <li>使用简单，不必重构代码</li>
+    <li>没有锁，所以不会死锁</li>
+    <li>性能好线程很少处于Idle状态</li>
+</ul>
